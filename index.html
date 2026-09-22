@@ -1250,64 +1250,6 @@
         </div>
     </div>
     
-    <!-- Edit Request Modal (பெயர்/செல்/மின்னஞ்சல்/சேவை/குறிப்பு/கட்டணம் என அனைத்தும் திருத்த) -->
-    <div id="editPaymentModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-pen"></i> கோரிக்கையை திருத்தவும்</h3>
-                <button class="modal-close" onclick="closeEditPaymentModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="editReqName"><i class="fas fa-user"></i> பெயர்</label>
-                    <input type="text" id="editReqName">
-                </div>
-                <div class="form-group">
-                    <label for="editReqPhone"><i class="fas fa-phone"></i> செல் எண்</label>
-                    <input type="text" id="editReqPhone">
-                </div>
-                <div class="form-group">
-                    <label for="editReqEmail"><i class="fas fa-envelope"></i> மின்னஞ்சல்</label>
-                    <input type="email" id="editReqEmail">
-                </div>
-                <div class="form-group">
-                    <label for="editReqServiceType"><i class="fas fa-tasks"></i> சேவை</label>
-                    <select id="editReqServiceType" onchange="populateEditReqSubServices()"></select>
-                </div>
-                <div class="form-group">
-                    <label for="editReqSubService"><i class="fas fa-list"></i> துணை சேவை</label>
-                    <select id="editReqSubService"></select>
-                </div>
-                <div class="form-group">
-                    <label for="editReqDetails"><i class="fas fa-comment"></i> குறிப்புகள்</label>
-                    <textarea id="editReqDetails" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="editPaymentAmount"><i class="fas fa-rupee-sign"></i> கட்டணம் தொகை (₹)</label>
-                    <input type="number" id="editPaymentAmount" placeholder="உதா. 500" min="0">
-                </div>
-                <div class="form-group">
-                    <label for="editPaymentStatus"><i class="fas fa-info-circle"></i> கட்டண நிலை</label>
-                    <select id="editPaymentStatus">
-                        <option value="pending">நிலுவையில் / செலுத்தப்படவில்லை</option>
-                        <option value="paid">செலுத்தப்பட்டது</option>
-                    </select>
-                </div>
-                <p style="font-size: 0.8rem; color: #666; margin-bottom: 15px;">WhatsApp/மின்னஞ்சல் அனுப்பாது - தரவை மட்டும் சரிசெய்யும்.</p>
-                <div class="btn-group">
-                    <button class="btn-primary" onclick="saveEditPayment()">
-                        <i class="fas fa-save"></i> சேமிக்கவும்
-                    </button>
-                    <button class="btn-warning" onclick="closeEditPaymentModal()">
-                        <i class="fas fa-times"></i> ரத்துசெய்
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Reject Reason Modal -->
     <div id="rejectModal" class="modal">
         <div class="modal-content">
@@ -3511,12 +3453,7 @@
                         <td>${request.phone}</td>
                         <td>${request.serviceType} - ${request.subService}</td>
                         <td>${request.referenceNumber || '-'}</td>
-                        <td>
-                            <span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span>
-                            ${request.paymentStatus === 'paid' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #2e7d32; margin-top: 3px; white-space: nowrap;"><i class="fas fa-check-circle"></i> ₹${request.paymentAmount} செலுத்தப்பட்டது</div>` : ''}
-                            ${request.status === 'payment_pending' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #8a6100; margin-top: 3px; white-space: nowrap;"><i class="fas fa-hourglass-half"></i> ₹${request.paymentAmount} நிலுவை</div>` : ''}
-                            <a href="javascript:void(0)" onclick="openEditPaymentModal('${request.id}')" style="font-size: 0.75rem; color: #1565c0; white-space: nowrap; display: inline-block; margin-top: 3px;" title="கட்டணத்தை திருத்த"><i class="fas fa-pen"></i> திருத்து</a>
-                        </td>
+                        <td><span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span></td>
                         <td style="max-width: 220px; white-space: normal;">${(request.details || '').slice(0, 60)}${request.details && request.details.length > 60 ? '…' : ''}</td>
                         <td>${request.date}</td>
                         <td>${request.lastUpdated || request.date}</td>
@@ -3649,12 +3586,11 @@
 
         // Excel (CSV) பதிவிறக்கம் செய்யும் செயல்பாடு
         function exportRequestsExcel() {
-            const headers = ['ID', 'பெயர்', 'செல்', 'மின்னஞ்சல்', 'சேவை', 'துணை சேவை', 'குறிப்பு எண்', 'நிலை', 'கட்டணம்', 'கட்டண நிலை', 'குறிப்பு', 'பதிவு தேதி', 'கடைசி அப்டேட்'];
+            const headers = ['ID', 'பெயர்', 'செல்', 'மின்னஞ்சல்', 'சேவை', 'துணை சேவை', 'குறிப்பு எண்', 'நிலை', 'குறிப்பு', 'பதிவு தேதி', 'கடைசி அப்டேட்'];
             const rows = STATE.customerRequests.map(r => [
                 r.id, r.name, r.phone, r.email || '', r.serviceType, r.subService,
-                r.referenceNumber || '', getStatusText(r.status), r.paymentAmount ? `₹${r.paymentAmount}` : '-',
-                r.paymentStatus === 'paid' ? 'செலுத்தப்பட்டது' : (r.paymentAmount ? 'நிலுவை' : '-'),
-                (r.details || '').replace(/\n/g, ' '), r.date, r.lastUpdated || r.date
+                r.referenceNumber || '', getStatusText(r.status), (r.details || '').replace(/\n/g, ' '),
+                r.date, r.lastUpdated || r.date
             ]);
 
             let csv = headers.join(',') + '\n';
@@ -3759,14 +3695,6 @@
                     <div class="request-detail"><i class="fas fa-calendar"></i> <span>${request.date}</span></div>
                     ${staff ? `<div class="request-detail"><i class="fas fa-user-tie"></i> <span>${staff.name}</span></div>` : ''}
                     <div class="request-detail"><span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span></div>
-                </div>
-
-                <div style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
-                    <strong><i class="fas fa-rupee-sign"></i> கட்டணம்:</strong>
-                    <span style="color: ${request.paymentStatus === 'paid' ? '#2e7d32' : '#8a6100'};">
-                        ${request.paymentAmount ? `₹${request.paymentAmount} - ${request.paymentStatus === 'paid' ? 'செலுத்தப்பட்டது' : 'நிலுவையில்'}` : 'பதிவு செய்யப்படவில்லை'}
-                    </span>
-                    <a href="javascript:void(0)" onclick="openEditPaymentModal('${request.id}')" style="margin-left: 10px; font-size: 0.85rem; color: #1565c0;"><i class="fas fa-pen"></i> திருத்து</a>
                 </div>
 
                 <div>
@@ -3887,76 +3815,6 @@
 
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.remove('active');
-        }
-
-        // கோரிக்கையின் பெயர்/செல்/மின்னஞ்சல்/சேவை/குறிப்பு/கட்டணம் ஆகியவற்றை நேரடியாக திருத்தும்
-        // மாடல் (WhatsApp/மின்னஞ்சல் அனுப்பாது, தரவை மட்டும் சரிசெய்ய - தவறாக பதிவான
-        // சேவை பெயர் போன்றவற்றை சரிசெய்யவும் பயன்படும்)
-        function populateEditReqServiceTypes(selectedService) {
-            const sel = document.getElementById('editReqServiceType');
-            sel.innerHTML = STATE.services.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-            sel.value = selectedService;
-        }
-
-        function populateEditReqSubServices(selectedSub) {
-            const serviceType = document.getElementById('editReqServiceType').value;
-            const subSel = document.getElementById('editReqSubService');
-            const subs = STATE.subServices[serviceType] || [];
-            subSel.innerHTML = subs.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
-            if (selectedSub) subSel.value = selectedSub;
-        }
-
-        function openEditPaymentModal(requestId) {
-            const request = STATE.customerRequests.find(r => r.id === requestId);
-            if (!request) return;
-
-            STATE.currentEditPaymentRequestId = requestId;
-            document.getElementById('editReqName').value = request.name || '';
-            document.getElementById('editReqPhone').value = request.phone || '';
-            document.getElementById('editReqEmail').value = request.email || '';
-            populateEditReqServiceTypes(request.serviceType);
-            populateEditReqSubServices(request.subService);
-            document.getElementById('editReqDetails').value = request.details || '';
-            document.getElementById('editPaymentAmount').value = request.paymentAmount || '';
-            document.getElementById('editPaymentStatus').value = request.paymentStatus === 'paid' ? 'paid' : 'pending';
-            document.getElementById('editPaymentModal').classList.add('active');
-        }
-
-        function closeEditPaymentModal() {
-            document.getElementById('editPaymentModal').classList.remove('active');
-        }
-
-        function saveEditPayment() {
-            const requestId = STATE.currentEditPaymentRequestId;
-            const request = STATE.customerRequests.find(r => r.id === requestId);
-            if (!request) return;
-
-            request.name = document.getElementById('editReqName').value.trim() || request.name;
-            request.phone = document.getElementById('editReqPhone').value.trim() || request.phone;
-            request.email = document.getElementById('editReqEmail').value.trim();
-            request.serviceType = document.getElementById('editReqServiceType').value;
-            request.subService = document.getElementById('editReqSubService').value;
-            request.details = document.getElementById('editReqDetails').value;
-
-            const amountVal = document.getElementById('editPaymentAmount').value;
-            const statusVal = document.getElementById('editPaymentStatus').value;
-            request.paymentAmount = amountVal ? Number(amountVal) : '';
-            request.paymentStatus = statusVal;
-            request.lastUpdated = new Date().toLocaleString('ta-IN');
-
-            saveRequests();
-            pushRequestUpdate(request, {
-                name: request.name,
-                phone: request.phone,
-                email: request.email,
-                serviceType: request.serviceType,
-                subService: request.subService,
-                details: request.details
-            });
-            closeEditPaymentModal();
-            refreshAdminRequests();
-            refreshOpenRequestDetailModal(request.id);
-            showNotification('கோரிக்கை விபரம் புதுப்பிக்கப்பட்டது', 'success');
         }
 
         // FIX: இதற்கு முன் QR கோடு <canvas>-இல் அட்மின் browser-க்குள் மட்டுமே உருவாகி, WhatsApp செய்தியில்

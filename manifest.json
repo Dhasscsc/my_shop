@@ -1,0 +1,33 @@
+{
+  "name": "தாஸ் பொது சேவை மையம்",
+  "short_name": "Dhass",
+  "description": "ஆதார், பான், ஆவண சான்றுகள் மற்றும் பிற அரசு சேவைகள் - ஆன்லைன் கோரிக்கை",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7fa",
+  "theme_color": "#1e3799",
+  "lang": "ta",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

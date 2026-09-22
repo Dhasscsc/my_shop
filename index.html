@@ -1285,6 +1285,15 @@
                     <textarea id="editReqDetails" rows="3"></textarea>
                 </div>
                 <div class="form-group">
+                    <label for="editReqStatus"><i class="fas fa-flag"></i> சேவை நிலை</label>
+                    <select id="editReqStatus">
+                        <option value="new">நிலுவை</option>
+                        <option value="processing">செயல்பாட்டில்</option>
+                        <option value="completed">முடிந்தது</option>
+                        <option value="rejected">நிராகரிக்கப்பட்டது</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="editPaymentAmount"><i class="fas fa-rupee-sign"></i> கட்டணம் தொகை (₹)</label>
                     <input type="number" id="editPaymentAmount" placeholder="உதா. 500" min="0">
                 </div>
@@ -3917,6 +3926,9 @@
             populateEditReqServiceTypes(request.serviceType);
             populateEditReqSubServices(request.subService);
             document.getElementById('editReqDetails').value = request.details || '';
+            const statusSel = document.getElementById('editReqStatus');
+            const knownStatuses = ['new', 'processing', 'completed', 'rejected'];
+            statusSel.value = knownStatuses.includes(request.status) ? request.status : 'new';
             document.getElementById('editPaymentAmount').value = request.paymentAmount || '';
             document.getElementById('editPaymentStatus').value = request.paymentStatus === 'paid' ? 'paid' : 'pending';
             document.getElementById('editPaymentModal').classList.add('active');
@@ -3937,6 +3949,7 @@
             request.serviceType = document.getElementById('editReqServiceType').value;
             request.subService = document.getElementById('editReqSubService').value;
             request.details = document.getElementById('editReqDetails').value;
+            request.status = document.getElementById('editReqStatus').value;
 
             const amountVal = document.getElementById('editPaymentAmount').value;
             const statusVal = document.getElementById('editPaymentStatus').value;
@@ -4474,6 +4487,23 @@
             refreshServiceTypeDropdowns();
         }
 
+        // ஒரு சேவை வகைக்குள் இருக்கும் துணை சேவைகளை மேலே/கீழே நகர்த்தும் செயல்பாடு
+        function moveSubServiceUp(categoryName, index) {
+            const arr = STATE.subServices[categoryName];
+            if (!arr || index <= 0) return;
+            [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
+            saveSubServices();
+            document.getElementById('categoriesList').innerHTML = renderCategoriesList();
+        }
+
+        function moveSubServiceDown(categoryName, index) {
+            const arr = STATE.subServices[categoryName];
+            if (!arr || index >= arr.length - 1) return;
+            [arr[index], arr[index + 1]] = [arr[index + 1], arr[index]];
+            saveSubServices();
+            document.getElementById('categoriesList').innerHTML = renderCategoriesList();
+        }
+
         // சேவை வகைகள் மற்றும் துணை சேவைகள் பட்டியலை உருவாக்கும் செயல்பாடு
         function renderCategoriesList() {
             if (STATE.serviceTypes.length === 0) {
@@ -4485,7 +4515,15 @@
                 const escapedCategory = category.replace(/'/g, "\\'");
 
                 const subTags = subs.length > 0 ? subs.map((sub, subIndex) => `
-                    <span style="display: inline-flex; align-items: center; gap: 6px; background: #f0f4f8; border-radius: 20px; padding: 6px 8px 6px 14px; margin: 4px 6px 4px 0; font-size: 0.9rem;">
+                    <span style="display: inline-flex; align-items: center; gap: 6px; background: #f0f4f8; border-radius: 20px; padding: 6px 8px 6px 10px; margin: 4px 6px 4px 0; font-size: 0.9rem;">
+                        <span style="display: flex; flex-direction: column; gap: 0px;">
+                            <button onclick="moveSubServiceUp('${escapedCategory}', ${subIndex})" title="மேலே நகர்த்து" ${subIndex === 0 ? 'disabled' : ''} style="border: none; background: none; color: ${subIndex === 0 ? '#ccc' : '#555'}; cursor: ${subIndex === 0 ? 'not-allowed' : 'pointer'}; padding: 0; line-height: 0.9; font-size: 0.7rem;">
+                                <i class="fas fa-caret-up"></i>
+                            </button>
+                            <button onclick="moveSubServiceDown('${escapedCategory}', ${subIndex})" title="கீழே நகர்த்து" ${subIndex === subs.length - 1 ? 'disabled' : ''} style="border: none; background: none; color: ${subIndex === subs.length - 1 ? '#ccc' : '#555'}; cursor: ${subIndex === subs.length - 1 ? 'not-allowed' : 'pointer'}; padding: 0; line-height: 0.9; font-size: 0.7rem;">
+                                <i class="fas fa-caret-down"></i>
+                            </button>
+                        </span>
                         ${sub.name}${sub.fee > 0 ? ` <span style="color: #2e7d32; font-weight: 600;">₹${sub.fee}</span>` : ''}${sub.documents && sub.documents.length > 0 ? ` <span style="color: #888;" title="${sub.documents.join(', ')}">(${sub.documents.length} ஆவணங்கள்)</span>` : ''}
                         <button onclick="openWhatsappServiceModal('${escapedCategory}', ${subIndex})" title="WhatsApp-ல் அனுப்பவும்" style="border: none; background: none; color: #25d366; cursor: pointer; padding: 2px;">
                             <i class="fab fa-whatsapp"></i>

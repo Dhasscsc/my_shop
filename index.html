@@ -3453,7 +3453,11 @@
                         <td>${request.phone}</td>
                         <td>${request.serviceType} - ${request.subService}</td>
                         <td>${request.referenceNumber || '-'}</td>
-                        <td><span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span></td>
+                        <td>
+                            <span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span>
+                            ${request.paymentStatus === 'paid' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #2e7d32; margin-top: 3px; white-space: nowrap;"><i class="fas fa-check-circle"></i> ₹${request.paymentAmount} செலுத்தப்பட்டது</div>` : ''}
+                            ${request.status === 'payment_pending' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #8a6100; margin-top: 3px; white-space: nowrap;"><i class="fas fa-hourglass-half"></i> ₹${request.paymentAmount} நிலுவை</div>` : ''}
+                        </td>
                         <td style="max-width: 220px; white-space: normal;">${(request.details || '').slice(0, 60)}${request.details && request.details.length > 60 ? '…' : ''}</td>
                         <td>${request.date}</td>
                         <td>${request.lastUpdated || request.date}</td>
@@ -3586,11 +3590,12 @@
 
         // Excel (CSV) பதிவிறக்கம் செய்யும் செயல்பாடு
         function exportRequestsExcel() {
-            const headers = ['ID', 'பெயர்', 'செல்', 'மின்னஞ்சல்', 'சேவை', 'துணை சேவை', 'குறிப்பு எண்', 'நிலை', 'குறிப்பு', 'பதிவு தேதி', 'கடைசி அப்டேட்'];
+            const headers = ['ID', 'பெயர்', 'செல்', 'மின்னஞ்சல்', 'சேவை', 'துணை சேவை', 'குறிப்பு எண்', 'நிலை', 'கட்டணம்', 'கட்டண நிலை', 'குறிப்பு', 'பதிவு தேதி', 'கடைசி அப்டேட்'];
             const rows = STATE.customerRequests.map(r => [
                 r.id, r.name, r.phone, r.email || '', r.serviceType, r.subService,
-                r.referenceNumber || '', getStatusText(r.status), (r.details || '').replace(/\n/g, ' '),
-                r.date, r.lastUpdated || r.date
+                r.referenceNumber || '', getStatusText(r.status), r.paymentAmount ? `₹${r.paymentAmount}` : '-',
+                r.paymentStatus === 'paid' ? 'செலுத்தப்பட்டது' : (r.paymentAmount ? 'நிலுவை' : '-'),
+                (r.details || '').replace(/\n/g, ' '), r.date, r.lastUpdated || r.date
             ]);
 
             let csv = headers.join(',') + '\n';

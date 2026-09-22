@@ -1698,15 +1698,19 @@
         // FIX: Server-இலிருந்து Config (services/subServices/staff/serviceTypes/adminPassword)
         // தரவை getConfig action மூலம் இழுத்து STATE-ஐ புதுப்பிக்கும். localStorage-ஐ இனி
         // இடைநிலை (intermediate) சேமிப்பாக பயன்படுத்தாது - Google Sheet-தான் ஒரே தரவு மூலம்.
+        // திருப்பி அனுப்புவது: true என்றால் server-ஐ உண்மையிலேயே தொடர்பு கொண்டு succesful-ஆக
+        // தரவு பெறப்பட்டது (server-ல் அந்த key இல்லாவிட்டாலும் இது true). false என்றால்
+        // network/parse பிழையால் sync failed - இந்நிலையில் STATE-ஐ hardcoded defaults-ஆல்
+        // நிரப்பினாலும் அதை server-க்கு திருப்பி save செய்யக்கூடாது (இருக்கும் தரவை wipe செய்துவிடும்).
         async function syncFromServer() {
-            if (!GAS_CONFIG.enabled || GAS_CONFIG.url.includes('PASTE_YOUR')) return;
+            if (!GAS_CONFIG.enabled || GAS_CONFIG.url.includes('PASTE_YOUR')) return false;
             try {
                 const response = await gasSend({ action: 'getConfig' });
-                if (!response) return;
+                if (!response) return false;
                 const result = await response.json().catch(() => null);
                 if (!result || result.status !== 'ok' || !result.config) {
-                    console.error('Server config sync (load) failed, using in-app defaults');
-                    return;
+                    console.error('Server config sync (load) failed, using in-app defaults (NOT saving back)');
+                    return false;
                 }
 
                 const cfg = result.config;
@@ -1716,8 +1720,10 @@
                 if (cfg.dhassServiceTypes) STATE.serviceTypes = JSON.parse(cfg.dhassServiceTypes);
                 if (cfg.dhassAdminPassword) STATE.adminPassword = cfg.dhassAdminPassword;
                 console.log('Server config sync (load) complete');
+                return true;
             } catch (err) {
-                console.error('Server config sync (load) failed, using in-app defaults:', err);
+                console.error('Server config sync (load) failed, using in-app defaults (NOT saving back):', err);
+                return false;
             }
         }
 
@@ -1729,14 +1735,27 @@
 
         // Initialize Application
         document.addEventListener('DOMContentLoaded', async function() {
-            await syncFromServer();
-            initializeApp();
+            const syncSucceeded = await syncFromServer();
+            initializeApp(syncSucceeded);
             loadServiceData();
             setupEventListeners();
             checkLoginStatus();
+            if (!syncSucceeded && typeof showNotification === 'function') {
+                showNotification('⚠️ Server-உடன் இணைக்க முடியவில்லை - இணையத்தை சரிபார்த்து பக்கத்தை மீண்டும் திறக்கவும்', 'error');
+            }
         });
 
-        function initializeApp() {
+        function initializeApp(syncSucceeded) {
+            // FIX: sync fail ஆன நேரத்தில் (network/server பிழை) STATE.services காலியா
+            // இருக்கும் - அது "server-ல் data இல்லை" என்று அர்த்தமில்லை, sync தோல்வி
+            // அடைந்தது என்று மட்டுமே அர்த்தம். அப்படி saveServices()/saveSubServices()/
+            // saveStaff() call பண்ணி defaults-ஐ server-க்கு திருப்பி எழுதினால், வேறு
+            // device-ல் admin சேர்த்த உண்மையான சேவைகள் அழிந்துபோகும். அதனால் sync
+            // உண்மையிலேயே succeed ஆகி, server-ல் genuinely அந்த key இல்லாதபோது மட்டுமே
+            // defaults-ஐ save பண்ணுவோம். sync fail ஆகி இருந்தால், இந்த session-க்கு
+            // மட்டும் (server-க்கு save செய்யாமல்) defaults-ஐ in-memory-ல் காட்டுவோம்.
+            const canSave = syncSucceeded === true;
+
             // Initialize services if empty
             if (STATE.services.length === 0) {
                 STATE.services = [
@@ -1753,7 +1772,8 @@
                         documents: ['ஆதார் அட்டை', 'வங்கிக் கணக்கு விவரங்கள்', 'புகைப்படம்']
                     }
                 ];
-                saveServices();
+                if (canSave) saveServices();
+                else console.warn('Sync failed - using default services for this session only, NOT saving to server.');
             }
 
             // Initialize sub-services
@@ -1775,7 +1795,8 @@
                         { name: 'மாற்றம்', fee: 0, documents: ['வாக்காளர் அட்டை'] }
                     ]
                 };
-                saveSubServices();
+                if (canSave) saveSubServices();
+                else console.warn('Sync failed - using default sub-services for this session only, NOT saving to server.');
             } else {
                 migrateSubServicesFormat();
             }
@@ -1793,7 +1814,8 @@
                         completedTasks: 0
                     }
                 ];
-                saveStaff();
+                if (canSave) saveStaff();
+                else console.warn('Sync failed - using default staff for this session only, NOT saving to server.');
             }
 
             // Populate service type dropdown

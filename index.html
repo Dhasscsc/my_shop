@@ -3064,11 +3064,16 @@
             document.getElementById('customerPage').style.display = 'none';
         }
 
-        function showStaffDashboard(staffId) {
+        async function showStaffDashboard(staffId) {
             const staff = STATE.staffMembers.find(s => s.id === staffId);
             if (!staff) return;
             
             localStorage.setItem('dhassCurrentUser', JSON.stringify(STATE.currentUser));
+
+            // FIX: பணியாளர் பேனல் திறக்கும்போதே Sheet-இலிருந்து புதிய கோரிக்கை தரவை
+            // (ஆவணங்கள் driveLinks உட்பட) load பண்ணவும் - இதுவரை இது இல்லாததால்
+            // பணியாளருக்கு STATE.customerRequests காலி/பழையதா இருந்திருக்கலாம்.
+            await loadAdminRequests();
             
             const dashboardHTML = `
                 <div class="admin-container">
@@ -4856,9 +4861,21 @@
                         
                         ${task.files && task.files.length > 0 ? `
                         <div style="margin-top: 15px;">
-                            <strong><i class="fas fa-file"></i> ஆவணங்கள்:</strong>
+                            <strong><i class="fas fa-file"></i> ஆவணங்கள் (இந்த கணினியில்):</strong>
                             <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                                 ${fileButtonsHTML}
+                            </div>
+                        </div>` : ''}
+
+                        ${task.driveLinks && task.driveLinks.length > 0 ? `
+                        <div style="margin-top: 15px;">
+                            <strong><i class="fab fa-google-drive"></i> வாடிக்கையாளர் ஆவணங்கள்:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+                                ${task.driveLinks.map(f => `
+                                    <a class="btn-success" href="${f.url}" target="_blank" style="padding: 5px 10px; font-size: 0.9rem; text-decoration:none; display:inline-block;">
+                                        <i class="fab fa-google-drive"></i> ${f.name}
+                                    </a>
+                                `).join('')}
                             </div>
                         </div>` : ''}
                         
@@ -4867,7 +4884,7 @@
                                 <i class="fas fa-play"></i> தொடங்கு
                             </button>
                             <button class="btn-primary" onclick="openReferenceModal('${task.id}')">
-                                <i class="fas fa-check"></i> முடிக்க
+                                <i class="fas fa-check"></i> முடிக்க + ரசீது இணைக்க
                             </button>
                             <button class="btn-warning" onclick="staffRequestHelp('${task.id}')">
                                 <i class="fas fa-question-circle"></i> உதவி
@@ -4913,6 +4930,13 @@
                                 <span>${task.referenceNumber}</span>
                             </div>` : ''}
                         </div>
+
+                        ${task.finalDocumentUrl ? `
+                        <div style="margin-top: 10px;">
+                            <a class="btn-success" href="${task.finalDocumentUrl}" target="_blank" style="padding: 5px 10px; font-size: 0.9rem; text-decoration:none; display:inline-block;">
+                                <i class="fas fa-receipt"></i> இணைத்த ரசீது/சான்றிதழ்
+                            </a>
+                        </div>` : ''}
                     </div>
                 `;
             });

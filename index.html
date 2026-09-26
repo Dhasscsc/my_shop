@@ -1709,7 +1709,8 @@
                 paymentAmount: request.paymentAmount || '',
                 paymentStatus: request.paymentStatus || '',
                 rejectReason: request.rejectReason || '',
-                assignedToName: staff ? staff.name : ''
+                assignedToName: staff ? staff.name : '',
+                assignedTo: request.assignedTo || ''
             }, extra || {}));
         }
 
@@ -3527,6 +3528,7 @@
                         <td>${request.referenceNumber || '-'}</td>
                         <td>
                             <span class="table-status-pill ${request.status}">${getStatusText(request.status)}</span>
+                            ${(request.status === 'assigned' || request.status === 'processing') && request.assignedToName ? `<div style="font-size: 0.78rem; color: #6a1b9a; margin-top: 3px; white-space: nowrap;"><i class="fas fa-user-tie"></i> ${request.assignedToName}</div>` : ''}
                             ${request.paymentStatus === 'paid' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #2e7d32; margin-top: 3px; white-space: nowrap;"><i class="fas fa-check-circle"></i> ₹${request.paymentAmount} செலுத்தப்பட்டது</div>` : ''}
                             ${request.status === 'payment_pending' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #8a6100; margin-top: 3px; white-space: nowrap;"><i class="fas fa-hourglass-half"></i> ₹${request.paymentAmount} நிலுவை</div>` : ''}
                             <a href="javascript:void(0)" onclick="openEditPaymentModal('${request.id}')" style="font-size: 0.75rem; color: #1565c0; white-space: nowrap; display: inline-block; margin-top: 3px;" title="கட்டணத்தை திருத்த"><i class="fas fa-pen"></i> திருத்து</a>

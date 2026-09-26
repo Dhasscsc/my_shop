@@ -1287,7 +1287,9 @@
                 <div class="form-group">
                     <label for="editReqStatus"><i class="fas fa-flag"></i> சேவை நிலை</label>
                     <select id="editReqStatus">
-                        <option value="new">நிலுவை</option>
+                        <option value="new">புதியது</option>
+                        <option value="payment_pending">கட்டணம் நிலுவை</option>
+                        <option value="assigned">பணியாளருக்கு ஒதுக்கப்பட்டது</option>
                         <option value="processing">செயல்பாட்டில்</option>
                         <option value="completed">முடிந்தது</option>
                         <option value="rejected">நிராகரிக்கப்பட்டது</option>
@@ -3740,6 +3742,7 @@
             } else if (request.status === 'assigned') {
                 actionMenuHTML = `
                     <button class="btn-success" onclick="openReferenceModal('${request.id}')"><i class="fas fa-check"></i> முடிந்துவிட்டது</button>
+                    <button class="btn-warning" onclick="processPayment('${request.id}')"><i class="fas fa-rupee-sign"></i> கட்டண QR அனுப்பு</button>
                     <button class="btn-info" onclick="reassignRequest('${request.id}')"><i class="fas fa-redo"></i> மீண்டும் ஒதுக்கு</button>
                 `;
             } else if (request.status === 'processing') {
@@ -3934,7 +3937,7 @@
             populateEditReqSubServices(request.subService);
             document.getElementById('editReqDetails').value = request.details || '';
             const statusSel = document.getElementById('editReqStatus');
-            const knownStatuses = ['new', 'processing', 'completed', 'rejected'];
+            const knownStatuses = ['new', 'payment_pending', 'assigned', 'processing', 'completed', 'rejected'];
             statusSel.value = knownStatuses.includes(request.status) ? request.status : 'new';
             document.getElementById('editPaymentAmount').value = request.paymentAmount || '';
             document.getElementById('editPaymentStatus').value = request.paymentStatus === 'paid' ? 'paid' : 'pending';
@@ -3960,7 +3963,9 @@
 
             const amountVal = document.getElementById('editPaymentAmount').value;
             const statusVal = document.getElementById('editPaymentStatus').value;
-            request.paymentAmount = amountVal ? Number(amountVal) : '';
+            // FIX: தொகை பெட்டியை காலியாக விட்டு சேமித்தால், முன்பே பதிவான தொகையை அழிக்காமல் அப்படியே வைத்திருக்கும்
+            // (இதனால்தான் முன்பு WhatsApp செய்தியில் "தொகை: ₹" வெறுமையாக சென்றது)
+            request.paymentAmount = amountVal ? Number(amountVal) : (request.paymentAmount || '');
             request.paymentStatus = statusVal;
             request.lastUpdated = new Date().toLocaleString('ta-IN');
 

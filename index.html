@@ -1396,6 +1396,11 @@
                     <input type="file" id="certificateFile" accept=".pdf,.jpg,.jpeg,.png">
                     <p style="font-size:0.8rem;color:#666;margin-top:6px;">இணைத்தால், வாடிக்கையாளர் மின்னஞ்சலுக்கு சான்றிதழ் தானாக அனுப்பப்படும்.</p>
                 </div>
+                <div class="form-group">
+                    <label for="completionNote"><i class="fas fa-sticky-note"></i> நிர்வாகிக்கு குறிப்பு (விருப்பம்)</label>
+                    <textarea id="completionNote" placeholder="இந்த பணி பற்றி நிர்வாகிக்கு ஏதேனும் குறிப்பு..." rows="3"></textarea>
+                    <p style="font-size:0.8rem;color:#666;margin-top:6px;">இந்த குறிப்பு வாடிக்கையாளருக்கு அனுப்பப்படாது - நிர்வாகி பேனலில் மட்டும் தெரியும்.</p>
+                </div>
                 <div class="btn-group">
                     <button class="btn-success" onclick="generateReferenceNumber()">
                         <i class="fas fa-sync"></i> உருவாக்கவும்
@@ -1404,6 +1409,33 @@
                         <i class="fas fa-save"></i> சேமிக்கவும்
                     </button>
                     <button class="btn-warning" onclick="closeReferenceModal()">
+                        <i class="fas fa-times"></i> ரத்துசெய்
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Staff Reject Task Modal (பணியாளர் இந்த பணியை நிராகரிக்கும் மாடல்) -->
+    <div id="staffRejectModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-ban"></i> பணியை நிராகரி</h3>
+                <button class="modal-close" onclick="closeStaffRejectModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="staffRejectNote"><i class="fas fa-comment"></i> காரணம் / நிர்வாகிக்கு குறிப்பு</label>
+                    <textarea id="staffRejectNote" placeholder="இந்த பணியை ஏன் நிராகரிக்கிறீர்கள் என்பதை உள்ளிடவும்..." rows="4" required></textarea>
+                </div>
+                <p style="font-size:0.8rem;color:#666;margin-bottom:15px;">இந்த பணி நிர்வாகிக்கு திரும்ப அனுப்பப்பட்டு, உங்களது பணி பட்டியலில் இருந்து நீக்கப்படும். வாடிக்கையாளருக்கு எந்த செய்தியும் நேரடியாக அனுப்பப்படாது.</p>
+                <div class="btn-group">
+                    <button class="btn-danger" onclick="confirmStaffReject()">
+                        <i class="fas fa-ban"></i> நிராகரிக்கவும்
+                    </button>
+                    <button class="btn-warning" onclick="closeStaffRejectModal()">
                         <i class="fas fa-times"></i> ரத்துசெய்
                     </button>
                 </div>
@@ -1680,6 +1712,11 @@
             url: 'https://script.google.com/macros/s/AKfycbzu_Q2cL_BISuzEZlikS4SV3kiRCZnFuuLEeKKV1aGs5Ep_U2hRgKO9hWjnFe69ZO5dXw/exec',
             enabled: true // Web App URL செட் பண்ணிய பிறகு true ஆக மாற்றவும்
         };
+
+        // பணியாளர் "முடிக்க"/"நிராகரி" செய்யும்போது எழுதும் குறிப்பை நிர்வாகிக்கு
+        // மின்னஞ்சல் மூலம் உடனே தெரியப்படுத்த பயன்படும் (Code.gs-இல் உள்ள
+        // ADMIN_NOTIFY_EMAIL உடன் இதே மெயிலை வைத்திருக்கவும்)
+        const ADMIN_EMAIL = 'dhasscsc@gmail.com';
 
         function gasSend(payload) {
             if (!GAS_CONFIG.enabled || GAS_CONFIG.url.includes('PASTE_YOUR')) {
@@ -3533,6 +3570,7 @@
                             ${(request.status === 'assigned' || request.status === 'processing') && request.assignedToName ? `<div style="font-size: 0.78rem; color: #6a1b9a; margin-top: 3px; white-space: nowrap;"><i class="fas fa-user-tie"></i> ${request.assignedToName}</div>` : ''}
                             ${request.paymentStatus === 'paid' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #2e7d32; margin-top: 3px; white-space: nowrap;"><i class="fas fa-check-circle"></i> ₹${request.paymentAmount} செலுத்தப்பட்டது</div>` : ''}
                             ${request.status === 'payment_pending' && request.paymentAmount ? `<div style="font-size: 0.78rem; color: #8a6100; margin-top: 3px; white-space: nowrap;"><i class="fas fa-hourglass-half"></i> ₹${request.paymentAmount} நிலுவை</div>` : ''}
+                            ${request.staffNote ? `<div style="font-size: 0.78rem; color: #8a6100; margin-top: 3px; white-space: nowrap;" title="${request.staffNote.replace(/"/g, '&quot;')}"><i class="fas fa-sticky-note"></i> பணியாளர் குறிப்பு உள்ளது</div>` : ''}
                             <a href="javascript:void(0)" onclick="openEditPaymentModal('${request.id}')" style="font-size: 0.75rem; color: #1565c0; white-space: nowrap; display: inline-block; margin-top: 3px;" title="கட்டணத்தை திருத்த"><i class="fas fa-pen"></i> திருத்து</a>
                         </td>
                         <td style="max-width: 220px; white-space: normal;">${(request.details || '').slice(0, 60)}${request.details && request.details.length > 60 ? '…' : ''}</td>
@@ -3815,6 +3853,12 @@
                 <div style="margin-top: 15px; padding: 10px; background: #d4edda; border-radius: 6px; border: 1px solid #c3e6cb;">
                     <strong><i class="fas fa-hashtag"></i> குறிப்பு எண்:</strong>
                     <p style="margin-top: 5px; color: #155724;">${request.referenceNumber}</p>
+                </div>` : ''}
+
+                ${request.staffNote ? `
+                <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 6px; border: 1px solid #ffe69c;">
+                    <strong><i class="fas fa-sticky-note"></i> பணியாளர் குறிப்பு:</strong>
+                    <p style="margin-top: 5px; color: #664d03; white-space: pre-wrap;">${request.staffNote}</p>
                 </div>` : ''}
 
                 <div class="btn-group" style="margin-top: 20px; flex-wrap: wrap;">
@@ -4170,12 +4214,14 @@
             } else {
                 generateReferenceNumber();
             }
+            document.getElementById('completionNote').value = (request && request.staffNote) || '';
             
             document.getElementById('referenceModal').classList.add('active');
         }
 
         function closeReferenceModal() {
             document.getElementById('referenceModal').classList.remove('active');
+            document.getElementById('completionNote').value = '';
         }
 
         function generateReferenceNumber() {
@@ -4205,8 +4251,10 @@
             const request = STATE.customerRequests.find(r => r.id === STATE.currentRequestId);
             if (!request) return;
             
+            const completionNote = document.getElementById('completionNote').value.trim();
             request.referenceNumber = referenceNumber;
             request.status = 'completed';
+            request.staffNote = completionNote;
             request.lastUpdated = new Date().toLocaleString('ta-IN');
             saveRequests();
             
@@ -4237,8 +4285,8 @@
 
             // Google Drive-இல் சான்றிதழை பதிவேற்றி, வாடிக்கையாளர் பதிவிறக்க முடியும் இணைப்பை பெறவும்
             const updateExtra = certBase64
-                ? { certificateBase64: certBase64, certificateName: certFile.name, certificateMime: certFile.type }
-                : {};
+                ? { certificateBase64: certBase64, certificateName: certFile.name, certificateMime: certFile.type, staffNote: completionNote }
+                : { staffNote: completionNote };
             const response = await pushRequestUpdate(request, updateExtra);
             if (response) {
                 const result = await response.json().catch(() => null);
@@ -4246,6 +4294,15 @@
                     request.finalDocumentUrl = result.finalDocumentUrl;
                     saveRequests();
                 }
+            }
+
+            if (completionNote) {
+                const staffName = (STATE.currentUser && STATE.currentUser.name) || 'நிர்வாகி';
+                sendEmail(
+                    ADMIN_EMAIL,
+                    '📝 பணி முடிந்தது - குறிப்பு: ' + request.id,
+                    `${request.name} - ${request.subService} (${request.id}) பணி முடிக்கப்பட்டது.\n\nபணியாளர்: ${staffName}\n\nகுறிப்பு:\n${completionNote}`
+                );
             }
 
             if (request.email && certBase64) {
@@ -4893,6 +4950,9 @@
                             <button class="btn-primary" onclick="openReferenceModal('${task.id}')">
                                 <i class="fas fa-check"></i> முடிக்க + ரசீது இணைக்க
                             </button>
+                            <button class="btn-danger" onclick="openStaffRejectModal('${task.id}')">
+                                <i class="fas fa-ban"></i> நிராகரி
+                            </button>
                             <button class="btn-warning" onclick="staffRequestHelp('${task.id}')">
                                 <i class="fas fa-question-circle"></i> உதவி
                             </button>
@@ -4970,6 +5030,59 @@
             
             alert('உதவி கோரிக்கை நிர்வாகிக்கு அனுப்பப்பட்டது');
             showNotification('உதவி கோரிக்கை அனுப்பப்பட்டது', 'info');
+        }
+
+        // FIX: பணியாளர் தனக்கு ஒதுக்கப்பட்ட பணியை (காரணம்/குறிப்புடன்) நிராகரிக்கும் வசதி.
+        // இது வாடிக்கையாளர் கோரிக்கையை முழுவதுமாக நிராகரிக்காது - பணியை நிர்வாகியிடம்
+        // திரும்ப அனுப்பி (status: 'new', assignedTo அழிக்கப்படும்), காரணத்தை staffNote-இல்
+        // சேமித்து, நிர்வாகிக்கு மின்னஞ்சல் மூலம் உடனே தெரியப்படுத்தும்.
+        function openStaffRejectModal(requestId) {
+            STATE.currentRequestId = requestId;
+            document.getElementById('staffRejectNote').value = '';
+            document.getElementById('staffRejectModal').classList.add('active');
+        }
+
+        function closeStaffRejectModal() {
+            document.getElementById('staffRejectModal').classList.remove('active');
+            document.getElementById('staffRejectNote').value = '';
+        }
+
+        function confirmStaffReject() {
+            const note = document.getElementById('staffRejectNote').value.trim();
+            if (!note) {
+                showNotification('காரணத்தை / குறிப்பை உள்ளிடவும்', 'error');
+                return;
+            }
+
+            const request = STATE.customerRequests.find(r => r.id === STATE.currentRequestId);
+            if (!request) return;
+
+            const staff = request.assignedTo ? STATE.staffMembers.find(s => s.id == request.assignedTo) : null;
+            if (staff) {
+                staff.pendingTasks = Math.max(0, (staff.pendingTasks || 0) - 1);
+                saveStaff();
+            }
+
+            request.status = 'new';
+            request.assignedTo = null;
+            request.assignedToName = '';
+            request.staffNote = note;
+            request.lastUpdated = new Date().toLocaleString('ta-IN');
+            saveRequests();
+            pushRequestUpdate(request, { staffNote: note, assignedToName: '', assignedTo: '' });
+
+            const staffName = (STATE.currentUser && STATE.currentUser.name) || 'பணியாளர்';
+            sendEmail(
+                ADMIN_EMAIL,
+                '⚠️ பணி நிராகரிக்கப்பட்டது: ' + request.id,
+                `${request.name} - ${request.subService} (${request.id}) பணியை பணியாளர் நிராகரித்துள்ளார்.\n\nபணியாளர்: ${staffName}\n\nகாரணம்:\n${note}\n\nதயவு செய்து இதை வேறு பணியாளருக்கு மீண்டும் ஒதுக்கவும்.`
+            );
+
+            closeStaffRejectModal();
+            showNotification('பணி நிராகரிக்கப்பட்டு நிர்வாகிக்கு தெரிவிக்கப்பட்டது', 'success');
+            if (STATE.currentUser) {
+                document.getElementById('staffTasks').innerHTML = renderStaffTasks(STATE.currentUser.id);
+            }
         }
 
         function changeStaffPassword(staffId) {

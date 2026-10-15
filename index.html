@@ -1718,19 +1718,30 @@
         // ADMIN_NOTIFY_EMAIL உடன் இதே மெயிலை வைத்திருக்கவும்)
         const ADMIN_EMAIL = 'dhasscsc@gmail.com';
 
-        function gasSend(payload) {
+        function gasSend(payload, silent) {
             if (!GAS_CONFIG.enabled || GAS_CONFIG.url.includes('PASTE_YOUR')) {
                 console.log('GAS sync skipped (not configured):', payload.action);
                 return Promise.resolve(null);
+            }
+            // நிர்வாகி/பணியாளர் உள்நுழைந்திருந்தால் அவரது adminToken-ஐ சேர்க்கும் (server சரிபார்க்கும்)
+            if (STATE.currentUser && STATE.currentUser.token && !payload.adminToken) {
+                payload = Object.assign({ adminToken: STATE.currentUser.token }, payload);
             }
             // text/plain content-type தேவை preflight CORS தவிர்க்க
             return fetch(GAS_CONFIG.url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
+            }).then(resp => {
+                if (STATE.currentUser && STATE.currentUser.token) {
+                    resp.clone().json().then(r => {
+                        if (r && r.status === 'error' && r.message === 'unauthorized') handleSessionExpired();
+                    }).catch(() => {});
+                }
+                return resp;
             }).catch(err => {
                 console.error('GAS sync பிழை:', err);
-                showNotification('Cloud sync பிழை - இணையதள இணைப்பை சரிபார்க்கவும்', 'error');
+                if (!silent) showNotification('Cloud sync பிழை - இணையதள இணைப்பை சரிபார்க்கவும்', 'error');
                 return null;
             });
         }
@@ -1797,12 +1808,15 @@
             // சேவையகத்திடமிருந்து தரவு வரும் வரையிலான fallback defaults மட்டுமே.
             services: [],
             subServices: {},
+            // FIX (defaults-reset): சேவையகத்திலிருந்து Config வெற்றிகரமாக ஏற்றப்பட்டதா என்பதை அறிய
+            configLoaded: false,
+            staffLoaded: false,
+            serverHas: {},
             // FIX: Admin panel இனி localStorage-ஐ requests-க்கு நம்பாது - Google Sheet-ஐ
             // ஒரே தரவு மூலமாக (single source of truth) loadAdminRequests() மூலம் பயன்படுத்தும்.
             customerRequests: [],
             staffMembers: [],
             currentUser: null,
-            adminPassword: 'admin123',
             serviceTypes: [
                 'ஆதார் கார்டு',
                 'பான் கார்டு',
@@ -1824,30 +1838,103 @@
         // இடைநிலை (intermediate) சேமிப்பாக பயன்படுத்தாது - Google Sheet-தான் ஒரே தரவு மூலம்.
         async function syncFromServer() {
             if (!GAS_CONFIG.enabled || GAS_CONFIG.url.includes('PASTE_YOUR')) return;
-            try {
-                const response = await gasSend({ action: 'getConfig' });
-                if (!response) return;
-                const result = await response.json().catch(() => null);
-                if (!result || result.status !== 'ok' || !result.config) {
-                    console.error('Server config sync (load) failed, using in-app defaults');
-                    return;
+            // FIX (defaults-reset): தற்காலிக network/GAS தாமதம் இருந்தால் 3 முறை முயற்சி
+            let cfg = null;
+            for (let attempt = 1; attempt <= 3 && !cfg; attempt++) {
+                try {
+                    const response = await gasSend({ action: 'getConfig' }, true);
+                    const result = response ? await response.json().catch(() => null) : null;
+                    if (result && result.status === 'ok' && result.config) cfg = result.config;
+                } catch (err) {
+                    console.error('Server config sync (load) attempt ' + attempt + ' failed:', err);
                 }
+                if (!cfg && attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+            }
 
-                const cfg = result.config;
-                if (cfg.dhassServices) STATE.services = JSON.parse(cfg.dhassServices);
-                if (cfg.dhassSubServices) STATE.subServices = JSON.parse(cfg.dhassSubServices);
-                if (cfg.dhassStaff) STATE.staffMembers = JSON.parse(cfg.dhassStaff);
-                if (cfg.dhassServiceTypes) STATE.serviceTypes = JSON.parse(cfg.dhassServiceTypes);
-                if (cfg.dhassAdminPassword) STATE.adminPassword = cfg.dhassAdminPassword;
+            if (cfg) {
+                STATE.configLoaded = true;
+                STATE.serverHas = {};
+                Object.keys(cfg).forEach(k => { if (cfg[k] !== '' && cfg[k] !== null) STATE.serverHas[k] = true; });
+                try {
+                    if (cfg.dhassServices) STATE.services = JSON.parse(cfg.dhassServices);
+                    if (cfg.dhassSubServices) STATE.subServices = JSON.parse(cfg.dhassSubServices);
+                    if (cfg.dhassServiceTypes) STATE.serviceTypes = JSON.parse(cfg.dhassServiceTypes);
+                    // கடைசியாக வெற்றிகரமாக ஏற்றிய தரவை read-only fallback-ஆக மட்டும் வைத்துக்கொள்ளும்
+                    localStorage.setItem('dhassConfigCache', JSON.stringify({
+                        services: STATE.services, subServices: STATE.subServices,
+                        serviceTypes: STATE.serviceTypes
+                    }));
+                } catch (err) {
+                    console.error('Config parse error:', err);
+                    STATE.configLoaded = false; // சிதைந்த தரவு இருந்தால் எதையும் மேலெழுத வேண்டாம்
+                }
                 console.log('Server config sync (load) complete');
-            } catch (err) {
-                console.error('Server config sync (load) failed, using in-app defaults:', err);
+            } else {
+                // சேவையகம் கிடைக்கவில்லை: படிக்க மட்டும் (read-only) - சேமிக்கவே மாட்டோம்
+                STATE.configLoaded = false;
+                try {
+                    const cache = JSON.parse(localStorage.getItem('dhassConfigCache') || 'null');
+                    if (cache) {
+                        STATE.services = cache.services || [];
+                        STATE.subServices = cache.subServices || {};
+                        if (cache.serviceTypes && cache.serviceTypes.length) STATE.serviceTypes = cache.serviceTypes;
+                    }
+                } catch (e) {}
+                setTimeout(() => showNotification('சேவையகத் தரவை ஏற்ற முடியவில்லை - பக்கத்தை Refresh செய்யவும். (மாற்றங்கள் சேமிக்கப்படாது)', 'error'), 800);
             }
         }
 
         // ஒரு key/value-ஐ Config Sheet-க்கு saveConfig action மூலம் சேமிக்கும் (gasSend-ஐயே பயன்படுத்துகிறது)
         function syncToServer(key, value) {
-            return gasSend({ action: 'saveConfig', key: key, value: value });
+            // நிர்வாகி/பணியாளர் உள்நுழையாவிட்டால் எதையும் சேமிக்காது (server-உம் மறுக்கும்)
+            if (!(STATE.currentUser && STATE.currentUser.token)) {
+                return Promise.resolve(null);
+            }
+            // FIX (defaults-reset): Config ஏற்றப்படாத நிலையில் Sheet-ஐ ஒருபோதும் மேலெழுத வேண்டாம்
+            const needsStaff = (key === 'dhassStaff');
+            if ((needsStaff && !STATE.staffLoaded) || (!needsStaff && !STATE.configLoaded)) {
+                console.warn('Save blocked (config not loaded):', key);
+                showNotification('சேவையகத் தரவு ஏற்றப்படவில்லை - சேமிக்கவில்லை. பக்கத்தை Refresh செய்து மீண்டும் முயலவும்', 'error');
+                return Promise.resolve(null);
+            }
+            return gasSend({ action: 'saveConfig', key: key, value: value }).then(async resp => {
+                try {
+                    const r = resp ? await resp.clone().json() : null;
+                    if (r && r.status === 'error' && r.message !== 'unauthorized') {
+                        showNotification('சேமிப்பு தோல்வி (' + key + '): ' + (r.message || ''), 'error');
+                    }
+                } catch (e) {}
+                return resp;
+            });
+        }
+
+        // உள்நுழைந்த பின் பணியாளர் பட்டியலை (admin: முழுமையாக, staff: கடவுச்சொல் இல்லாமல்) ஏற்றும்
+        async function loadAdminConfig() {
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                const response = await gasSend({ action: 'getAdminConfig' }, true);
+                const result = response ? await response.json().catch(() => null) : null;
+                if (result && result.status === 'ok' && result.config) {
+                    try {
+                        STATE.staffMembers = JSON.parse(result.config.dhassStaff || '[]');
+                        STATE.staffLoaded = true;
+                        return true;
+                    } catch (e) { return false; }
+                }
+                if (result && result.message === 'unauthorized') return false;
+                await new Promise(r => setTimeout(r, 1200 * attempt));
+            }
+            return false;
+        }
+
+        // Session காலாவதியானால்/தவறானால் வெளியேற்றும்
+        function handleSessionExpired() {
+            if (!STATE.currentUser) return;
+            STATE.currentUser = null;
+            STATE.isAdminLoggedIn = false;
+            STATE.staffLoaded = false;
+            localStorage.removeItem('dhassCurrentUser');
+            showCustomerPage();
+            showNotification('உங்கள் உள்நுழைவு காலாவதியானது - மீண்டும் உள்நுழையவும்', 'error');
         }
         // ========================================================================
 
@@ -1862,7 +1949,7 @@
 
         function initializeApp() {
             // Initialize services if empty
-            if (STATE.services.length === 0) {
+            if (STATE.services.length === 0 && !STATE.serverHas.dhassServices) {
                 STATE.services = [
                     {
                         id: 1,
@@ -1877,11 +1964,11 @@
                         documents: ['ஆதார் அட்டை', 'வங்கிக் கணக்கு விவரங்கள்', 'புகைப்படம்']
                     }
                 ];
-                saveServices();
+                // defaults நினைவகத்தில் மட்டும் - Sheet-இல் தானாகச் சேமிக்காது
             }
 
             // Initialize sub-services
-            if (Object.keys(STATE.subServices).length === 0) {
+            if (Object.keys(STATE.subServices).length === 0 && !STATE.serverHas.dhassSubServices) {
                 STATE.subServices = {
                     'ஆதார் கார்டு': [
                         { name: 'புதிய ஆதார்', fee: 100, documents: ['வாழ்க்கைச் சான்றிதழ்', 'வாக்காளர் அட்டை'] },
@@ -1899,26 +1986,13 @@
                         { name: 'மாற்றம்', fee: 0, documents: ['வாக்காளர் அட்டை'] }
                     ]
                 };
-                saveSubServices();
+                // defaults நினைவகத்தில் மட்டும்
             } else {
                 migrateSubServicesFormat();
             }
 
-            // Initialize staff if empty
-            if (STATE.staffMembers.length === 0) {
-                STATE.staffMembers = [
-                    {
-                        id: 1,
-                        name: 'ரமேஷ் குமார்',
-                        email: 'ramesh@dhass.com',
-                        phone: '9876543210',
-                        password: 'staff123',
-                        pendingTasks: 0,
-                        completedTasks: 0
-                    }
-                ];
-                saveStaff();
-            }
+            // பணியாளர் பட்டியல் உள்நுழைந்த பின் loadAdminConfig() மூலம் மட்டுமே ஏற்றப்படும்
+            // (இனி default பணியாளர்/கடவுச்சொல் உருவாக்கப்படாது)
 
             // Populate service type dropdown
             const serviceTypeSelect = document.getElementById('serviceType');
@@ -2760,7 +2834,7 @@
                             
                             <div class="login-input-group">
                                 <label for="password">கடவுச்சொல்</label>
-                                <input type="password" id="password" class="login-input" value="admin123" required>
+                                <input type="password" id="password" class="login-input" required>
                             </div>
                             
                             <div class="login-input-group">
@@ -2790,48 +2864,61 @@
             document.getElementById('adminPages').style.display = 'block';
         }
 
-        function handleLogin(e) {
+        async function handleLogin(e) {
             e.preventDefault();
-            
+
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const userType = document.getElementById('userType').value;
-            
-            if (userType === 'admin') {
-                if (username === 'admin' && password === STATE.adminPassword) {
-                    STATE.currentUser = { type: 'admin', name: 'நிர்வாகி' };
-                    STATE.isAdminLoggedIn = true;
-                    showAdminDashboard();
-                    showNotification('வெற்றிகரமாக உள்நுழைந்தது!', 'success');
+
+            const response = await gasSend({ action: 'adminLogin', userType: userType, username: username, password: password });
+            const result = response ? await response.json().catch(() => null) : null;
+
+            if (!result || result.status !== 'ok') {
+                if (result && result.message === 'too_many_attempts') {
+                    showNotification('பல தவறான முயற்சிகள் - 15 நிமிடம் கழித்து முயலவும்', 'error');
+                } else if (!response) {
+                    showNotification('சேவையகத்தை அடைய முடியவில்லை - இணைப்பை சரிபார்க்கவும்', 'error');
                 } else {
                     showNotification('தவறான பயனர் பெயர் அல்லது கடவுச்சொல்', 'error');
                 }
-            } else if (userType === 'staff') {
-                const staff = STATE.staffMembers.find(s => 
-                    (s.email === username || s.phone === username) && s.password === password
-                );
-                
-                if (staff) {
-                    STATE.currentUser = { 
-                        type: 'staff', 
-                        id: staff.id,
-                        name: staff.name 
-                    };
-                    STATE.isAdminLoggedIn = true;
-                    showStaffDashboard(staff.id);
-                    showNotification('வெற்றிகரமாக உள்நுழைந்தது!', 'success');
-                } else {
-                    showNotification('தவறான பயனர் பெயர் அல்லது கடவுச்சொல்', 'error');
-                }
+                return;
             }
+
+            if (result.role === 'admin') {
+                STATE.currentUser = { type: 'admin', name: 'நிர்வாகி', token: result.token };
+            } else {
+                STATE.currentUser = { type: 'staff', id: result.staffId, name: result.name, token: result.token };
+            }
+            STATE.isAdminLoggedIn = true;
+            await loadAdminConfig();
+            if (result.role === 'admin') {
+                showAdminDashboard();
+            } else {
+                showStaffDashboard(result.staffId);
+            }
+            showNotification('வெற்றிகரமாக உள்நுழைந்தது!', 'success');
         }
 
-        function checkLoginStatus() {
+        async function checkLoginStatus() {
             const savedUser = localStorage.getItem('dhassCurrentUser');
             if (savedUser) {
-                STATE.currentUser = JSON.parse(savedUser);
+                let user = null;
+                try { user = JSON.parse(savedUser); } catch (e) {}
+                if (!user || !user.token) {
+                    // பழைய (token இல்லாத) session - மீண்டும் உள்நுழைய வேண்டும்
+                    localStorage.removeItem('dhassCurrentUser');
+                    return;
+                }
+                STATE.currentUser = user;
                 STATE.isAdminLoggedIn = true;
-                
+                const ok = await loadAdminConfig();
+                if (!STATE.currentUser) return; // loadAdminConfig-இல் unauthorized ஆகி வெளியேற்றப்பட்டிருக்கலாம்
+                if (!ok && !STATE.staffLoaded) {
+                    handleSessionExpired();
+                    return;
+                }
+
                 if (STATE.currentUser.type === 'admin') {
                     showAdminDashboard();
                 } else if (STATE.currentUser.type === 'staff') {
@@ -5103,18 +5190,13 @@
             showNotification('கடவுச்சொல் மாற்றப்பட்டது', 'success');
         }
 
-        function changeAdminPassword() {
+        async function changeAdminPassword() {
             const currentPassword = document.getElementById('currentPassword').value;
             const newPassword = document.getElementById('newPassword').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             
             if (!currentPassword || !newPassword || !confirmPassword) {
                 showNotification('அனைத்து புலங்களையும் நிரப்பவும்', 'error');
-                return;
-            }
-            
-            if (currentPassword !== STATE.adminPassword) {
-                showNotification('தற்போதைய கடவுச்சொல் தவறானது', 'error');
                 return;
             }
             
@@ -5128,8 +5210,12 @@
                 return;
             }
             
-            STATE.adminPassword = newPassword;
-            syncToServer('dhassAdminPassword', newPassword);
+            const response = await gasSend({ action: 'changeAdminPassword', currentPassword: currentPassword, newPassword: newPassword });
+            const result = response ? await response.json().catch(() => null) : null;
+            if (!result || result.status !== 'ok') {
+                showNotification(result && result.message === 'wrong_current' ? 'தற்போதைய கடவுச்சொல் தவறானது' : 'கடவுச்சொல்லை மாற்ற முடியவில்லை', 'error');
+                return;
+            }
             
             showNotification('கடவுச்சொல் வெற்றிகரமாக மாற்றப்பட்டது', 'success');
             
@@ -5137,14 +5223,12 @@
             document.getElementById('newPassword').value = '';
             document.getElementById('confirmPassword').value = '';
             
-            console.log('Admin password changed to:', newPassword);
         }
 
         // அனைத்து தரவையும் (சேவைகள், பணியாளர்கள், கோரிக்கைகள்) ஒரு JSON கோப்பாக ஏற்றுமதி செய்யும் செயல்பாடு
         function exportAllData() {
             const backup = {
                 exportDate: new Date().toISOString(),
-                adminPassword: STATE.adminPassword,
                 serviceTypes: STATE.serviceTypes,
                 services: STATE.services,
                 subServices: STATE.subServices,
@@ -5188,14 +5272,14 @@
                         return;
                     }
 
-                    STATE.adminPassword = backup.adminPassword || STATE.adminPassword;
+                    STATE.configLoaded = true; // வெளிப்படையான restore - அனுமதி (நிர்வாகி மட்டும்)
+                    STATE.staffLoaded = true;
                     STATE.serviceTypes = backup.serviceTypes || [];
                     STATE.services = backup.services || [];
                     STATE.subServices = backup.subServices || {};
                     STATE.staffMembers = backup.staffMembers || [];
                     STATE.customerRequests = backup.customerRequests || [];
 
-                    syncToServer('dhassAdminPassword', STATE.adminPassword);
                     saveServiceTypes();
                     saveServices();
                     saveSubServices();
@@ -5340,6 +5424,7 @@
 
         function logout() {
             STATE.currentUser = null;
+            STATE.staffLoaded = false;
             STATE.isAdminLoggedIn = false;
             localStorage.removeItem('dhassCurrentUser');
             showCustomerPage();
